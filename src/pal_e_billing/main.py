@@ -3,11 +3,11 @@ from contextlib import asynccontextmanager
 
 import stripe
 import uvicorn
-from fastapi import Depends, FastAPI, Path
+from fastapi import Depends, FastAPI, HTTPException, Path
 
 from .auth import require_api_key
 from .config import settings
-from .db import get_subscriber, init_db
+from .db import get_subscriber, init_db, update_gcal_gmail_status
 from .portal import router as portal_router
 from .stripe_webhook import router as webhook_router
 
@@ -44,7 +44,24 @@ def subscription_status(
     return {
         "is_active": subscriber["status"] == "active",
         "status": subscriber["status"],
+        "tier": subscriber["tier"],
+        "email": subscriber["email"],
+        "gcal_gmail_status": subscriber["gcal_gmail_status"],
     }
+
+
+@app.put("/activate-gcal/{telegram_user_id}")
+def activate_gcal(
+    telegram_user_id: str = Path(pattern=r"^\d+$"),
+    _key: str = Depends(require_api_key),
+):
+    subscriber = get_subscriber(telegram_user_id)
+    if not subscriber:
+        raise HTTPException(404, "No subscription found for this user")
+    updated = update_gcal_gmail_status(telegram_user_id, "active")
+    if not updated:
+        raise HTTPException(500, "Failed to update gcal_gmail_status")
+    return {"telegram_user_id": telegram_user_id, "gcal_gmail_status": "active"}
 
 
 def cli():
