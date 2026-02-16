@@ -40,7 +40,7 @@ def subscription_status(
 ):
     subscriber = get_subscriber(telegram_user_id)
     if not subscriber:
-        return {"is_active": False, "status": "none"}
+        return {"is_active": False, "status": "none", "tier": None, "email": None, "gcal_gmail_status": "none"}
     return {
         "is_active": subscriber["status"] == "active",
         "status": subscriber["status"],
