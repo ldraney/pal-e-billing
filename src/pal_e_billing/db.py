@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS subscribers (
 CREATE INDEX IF NOT EXISTS idx_stripe_customer ON subscribers(stripe_customer_id);
 """
 
+VALID_TIERS = {"base", "pro", "custom"}
+
 # Columns added for tier support. ALTER TABLE ADD COLUMN is safe to
 # retry — SQLite raises an error if the column already exists, which
 # we deliberately ignore so init_db() stays idempotent.
@@ -59,6 +61,8 @@ def upsert_subscriber(
     tier: str = "base",
     email: str | None = None,
 ) -> None:
+    if tier not in VALID_TIERS:
+        raise ValueError(f"Invalid tier '{tier}', must be one of {VALID_TIERS}")
     with _get_conn() as conn:
         conn.execute(
             """
@@ -121,8 +125,16 @@ def get_subscriber_by_customer(stripe_customer_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+_VALID_GCAL_GMAIL_STATUSES = {"none", "pending", "active"}
+
+
 def update_gcal_gmail_status(telegram_user_id: str, gcal_gmail_status: str) -> bool:
     """Update gcal_gmail_status for a subscriber. Returns True if a row was updated."""
+    if gcal_gmail_status not in _VALID_GCAL_GMAIL_STATUSES:
+        raise ValueError(
+            f"Invalid gcal_gmail_status '{gcal_gmail_status}', "
+            f"must be one of {_VALID_GCAL_GMAIL_STATUSES}"
+        )
     with _get_conn() as conn:
         cursor = conn.execute(
             "UPDATE subscribers SET gcal_gmail_status = ?, updated_at = datetime('now') WHERE telegram_user_id = ?",

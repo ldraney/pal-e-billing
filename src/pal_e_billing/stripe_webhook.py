@@ -4,12 +4,10 @@ import stripe
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from .config import settings
-from .db import update_status_by_subscription, upsert_subscriber
+from .db import VALID_TIERS, update_status_by_subscription, upsert_subscriber
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-_VALID_TIERS = {"base", "pro", "custom"}
 
 
 def _extract_tier(session: dict) -> str:
@@ -25,7 +23,7 @@ def _extract_tier(session: dict) -> str:
     """
     metadata = session.get("metadata") or {}
     tier = metadata.get("tier", "base")
-    if tier not in _VALID_TIERS:
+    if tier not in VALID_TIERS:
         logger.warning("Unknown tier '%s' in session metadata, defaulting to 'base'", tier)
         return "base"
     return tier
