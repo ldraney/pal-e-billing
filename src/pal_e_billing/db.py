@@ -28,7 +28,9 @@ def _get_conn() -> sqlite3.Connection:
 def init_db() -> None:
     Path(settings.db_path).parent.mkdir(parents=True, exist_ok=True)
     with _get_conn() as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+        result = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        if result[0] != "wal":
+            logger.warning("Failed to set WAL mode, got: %s", result[0])
         conn.executescript(_SCHEMA)
 
 
