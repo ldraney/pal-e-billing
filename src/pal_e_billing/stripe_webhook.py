@@ -4,7 +4,7 @@ import stripe
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from .config import settings
-from .db import upsert_subscriber, update_status_by_subscription
+from .db import update_status_by_subscription, upsert_subscriber
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,7 +32,7 @@ async def stripe_webhook(
         telegram_user_id = session.get("client_reference_id")
         if not telegram_user_id:
             logger.warning("checkout.session.completed without client_reference_id")
-            return {"status": "ignored"}
+            return {"status": "skipped", "reason": "missing client_reference_id"}
 
         upsert_subscriber(
             telegram_user_id=telegram_user_id,
