@@ -32,7 +32,7 @@ async def stripe_webhook(
         telegram_user_id = session.get("client_reference_id")
         if not telegram_user_id:
             logger.warning("checkout.session.completed without client_reference_id")
-            raise HTTPException(400, "Missing client_reference_id")
+            return {"status": "skipped", "reason": "missing client_reference_id"}
 
         upsert_subscriber(
             telegram_user_id=telegram_user_id,
