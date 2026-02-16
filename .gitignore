@@ -1,5 +1,40 @@
+# Python
 __pycache__/
+*.py[cod]
 *.egg-info/
 dist/
+build/
+*.egg
+.venv/
+venv/
+
+# Environment / secrets
 .env
+.env.*
+!.env.example
+
+# Database
 *.db
+*.db-wal
+*.db-shm
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Worktrees
+.worktrees/
+
+# Agent state
+.current-issue
