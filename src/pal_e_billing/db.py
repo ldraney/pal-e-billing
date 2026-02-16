@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS subscribers (
 CREATE INDEX IF NOT EXISTS idx_stripe_customer ON subscribers(stripe_customer_id);
 """
 
+# Columns added for tier support. ALTER TABLE ADD COLUMN is safe to
+# retry — SQLite raises an error if the column already exists, which
+# we deliberately ignore so init_db() stays idempotent.
+_MIGRATIONS: list[str] = [
+    "ALTER TABLE subscribers ADD COLUMN tier TEXT NOT NULL DEFAULT 'base'",
+    "ALTER TABLE subscribers ADD COLUMN email TEXT",
+    "ALTER TABLE subscribers ADD COLUMN gcal_gmail_status TEXT NOT NULL DEFAULT 'none'",
+]
+
 
 def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(settings.db_path)
@@ -33,25 +42,38 @@ def init_db() -> None:
             logger.warning("Failed to set WAL mode, got: %s", result[0])
         conn.executescript(_SCHEMA)
 
+        for stmt in _MIGRATIONS:
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError as exc:
+                # "duplicate column name" is expected on subsequent runs.
+                if "duplicate column" not in str(exc):
+                    raise
+
 
 def upsert_subscriber(
     telegram_user_id: str,
     stripe_customer_id: str,
     stripe_subscription_id: str | None,
     status: str = "active",
+    tier: str = "base",
+    email: str | None = None,
 ) -> None:
     with _get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO subscribers (telegram_user_id, stripe_customer_id, stripe_subscription_id, status)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO subscribers
+                (telegram_user_id, stripe_customer_id, stripe_subscription_id, status, tier, email)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(telegram_user_id) DO UPDATE SET
                 stripe_customer_id = excluded.stripe_customer_id,
                 stripe_subscription_id = COALESCE(excluded.stripe_subscription_id, stripe_subscription_id),
                 status = excluded.status,
+                tier = excluded.tier,
+                email = COALESCE(excluded.email, subscribers.email),
                 updated_at = datetime('now')
             """,
-            (telegram_user_id, stripe_customer_id, stripe_subscription_id, status),
+            (telegram_user_id, stripe_customer_id, stripe_subscription_id, status, tier, email),
         )
 
 
@@ -97,3 +119,19 @@ def get_subscriber_by_customer(stripe_customer_id: str) -> dict | None:
             (stripe_customer_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def update_gcal_gmail_status(telegram_user_id: str, gcal_gmail_status: str) -> bool:
+    """Update gcal_gmail_status for a subscriber. Returns True if a row was updated."""
+    with _get_conn() as conn:
+        cursor = conn.execute(
+            "UPDATE subscribers SET gcal_gmail_status = ?, updated_at = datetime('now') WHERE telegram_user_id = ?",
+            (gcal_gmail_status, telegram_user_id),
+        )
+        if cursor.rowcount == 0:
+            logger.warning(
+                "update_gcal_gmail_status: no rows matched telegram_user_id=%s",
+                telegram_user_id,
+            )
+            return False
+        return True
